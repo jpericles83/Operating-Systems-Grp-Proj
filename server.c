@@ -7,19 +7,20 @@
  *
  */
 
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
-#include<sys/types.h>
-#include<sys/socket.h>
-#include<sys/ipc.h>
-#include<sys/shm.h>
-#include<netinet/in.h>
-#include<netdb.h>
-#include<unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <time.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <unistd.h>
 
 #define SHMKEY ((key_t) 7890)
-#define PORTNUM  7777 /* the port number the server will listen to*/
+#define PORTNUM  1076 /* the port number the server will listen to*/
 #define DEFAULT_PROTOCOL 0  /*constant for default protocol*/
 
 void doprocessing(int sock, int waiting);
@@ -36,8 +37,12 @@ typedef struct {
 	enum Stages stage;
 	int num_clients;
 	int num_ready;
-	int game_matrix[16];
+	int m0[16];	// m0 <-- Array of points corresponding to the letters in m1.
+	char m1[16];	// m1 <-- Array of letters, a through p.
+
+	int temp;	// Temporary variable for submission 2.
 } shared_mem;
+
 shared_mem *client_data;
 
 int main(int argc, char *argv[])  {
@@ -45,23 +50,6 @@ int main(int argc, char *argv[])  {
    	char buffer[256];
    	struct sockaddr_in serv_addr, cli_addr;
    	int status, pid, pid2;
-	
-	// Shared memory stuff
-	key_t key = 123;   
-	int shmid;
-	char *shmadd;
-	shmadd = (char *) 0;
-
-
-	if((shmid = shmget (SHMKEY, sizeof(int), IPC_CREAT | 0666)) < 0) {
-		perror("shmget");
-		exit(1);
-	}
-
-	if((client_data = (shared_mem *) shmat (shmid, shmadd, 0)) == (shared_mem *)-1) {
-		perror("shmat");
-		exit(0);
-	}
 
    	/* First call to socket() function */
    	sockfd = socket(AF_INET, SOCK_STREAM,DEFAULT_PROTOCOL);
@@ -88,14 +76,48 @@ int main(int argc, char *argv[])  {
       		perror("ERROR on binding");
       		exit(1);
    	}
-   
+
+	// Shared memory code...
+	key_t key = 123;
+        int shmid;
+        char *shmadd;
+        shmadd = (char *) 0;
+
+        if((shmid = shmget (SHMKEY, sizeof(int), IPC_CREAT | 0660)) < 0) {
+                perror("shmget");
+                exit(1);
+        }
+
+        if((client_data = (shared_mem *) shmat (shmid, shmadd, 0)) == (shared_mem *)-1) {
+                perror("shmat");
+                exit(0);
+        }
+
+	// Initialize client_data.
+	client_data->stage = AWAITING_CLIENTS;
+	client_data->num_clients = 0;
+	client_data->num_ready = 0;
+
+	client_data->temp = 0;	// Temporary variable for submission 2.
+
+	int x; char c; c = 'a';
+
+	srand(time(0));	// Used to generate random points.
+
+	for(x = 0; x < 16; ++x) {
+		client_data->m0[x] = ((rand() % 51) - 25);	// Range of points = [-25, 25]
+		client_data->m1[x] = c++;
+
+		// Uncomment this printf(...) to check letters and their points.
+		printf("%c = %d\n", client_data->m1[x], client_data->m0[x]);
+	}
+
    	/* Now Server starts listening clients wanting to connect. No more than 5 clients allowed */
    
    	listen(sockfd, 5);
    	clilen = sizeof(cli_addr);
 	
-	printf("Server successfully binded on port %d. Listening for clients.\n", PORTNUM);
-	client_data->stage = AWAITING_CLIENTS;	
+	printf("Server successfully binded on port %d. Listening for clients.\n", PORTNUM);	
 
 	pid2 = fork(); // the game process
 	if(pid2 == fork()) { 
@@ -109,10 +131,14 @@ int main(int argc, char *argv[])  {
 				break;
 			}
 		}
+
+		while(client_data->temp < 6);	// Temporary so that main doesn't exit until two clients give three responses each.
+		
 		if((shmctl(shmid, IPC_RMID, (struct shmid_ds *) 0)) == -1) {
 			perror("shmctl");
 			exit(-1);
 		}
+		
 		//shutdown(sockfd, SHUT_RDWR);
 		exit(0);
 	}
@@ -142,7 +168,7 @@ int main(int argc, char *argv[])  {
       		if (pid == 0) {
          		/* This is the client process */
          		close(sockfd);
-         		int waiting = client_data->stage == 1;
+         		int waiting = client_data->stage /*== 1*/;
 			doprocessing(newsockfd, waiting);
          		exit(0);
       		} else {
@@ -161,17 +187,87 @@ void doprocessing (int sock, int waiting) {
 		
 		if(client_data->stage == AWAITING_CLIENTS) {
 			int prev = client_data->stage;
+			
 			if(waiting == 1) { // put any clients that are waiting back on track
 				waiting = 0;
 				write(sock, (const char *) &(client_data->stage), 4);
 			}
+			
 			read(sock, buffer, 255);
 			client_data->num_ready++;;
 			//printf("Ready: %d\n", client_data->num_ready);	
+			
 			while(prev == client_data->stage);
+			
 			char game_string[32];
-			game_to_string(game_string);
-			status = write(sock, game_string, 32);
+			int t;	// Temporary variable used for submission 2.
+
+			// while(client_data->stage == PLAYING)						}
+			// OR										} Loops for final submission.
+			// for(client_data->count = 0; client_data->count < 16; ++(client_data->count)) }
+			for(t = 0; t < 3; ++t) {	// Temporary loop for submission 2.
+				bzero(game_string, 32);
+				game_to_string(game_string);
+				status = write(sock, game_string, 32);	// Print matrix to client.
+
+				bzero(buffer, 256);
+				read(sock, buffer, 255);	// Read in client's choice.
+				
+				switch(buffer[0]) {
+					case 'A':
+					case 'a': printf("%c = %d\n", client_data->m1[0], client_data->m0[0]);
+						  break;
+					case 'B':
+                                        case 'b': printf("%c = %d\n", client_data->m1[1], client_data->m0[1]);
+                                                  break;
+					case 'C':
+                                        case 'c': printf("%c = %d\n", client_data->m1[2], client_data->m0[2]);
+                                                  break;
+                                        case 'D':
+                                        case 'd': printf("%c = %d\n", client_data->m1[3], client_data->m0[3]);
+                                                  break;
+					case 'E':
+                                        case 'e': printf("%c = %d\n", client_data->m1[4], client_data->m0[4]);
+                                                  break;
+                                        case 'F':
+                                        case 'f': printf("%c = %d\n", client_data->m1[5], client_data->m0[5]);
+                                                  break;
+                                        case 'G':
+                                        case 'g': printf("%c = %d\n", client_data->m1[6], client_data->m0[6]);
+                                                  break;
+                                        case 'H':
+                                        case 'h': printf("%c = %d\n", client_data->m1[7], client_data->m0[7]);
+                                                  break;
+					case 'I':
+                                        case 'i': printf("%c = %d\n", client_data->m1[8], client_data->m0[8]);
+                                                  break;
+                                        case 'J':
+                                        case 'j': printf("%c = %d\n", client_data->m1[9], client_data->m0[9]);
+                                                  break;
+                                        case 'K':
+                                        case 'k': printf("%c = %d\n", client_data->m1[10], client_data->m0[10]);
+                                                  break;
+                                        case 'L':
+                                        case 'l': printf("%c = %d\n", client_data->m1[11], client_data->m0[11]);
+                                                  break;
+                                        case 'M':
+                                        case 'm': printf("%c = %d\n", client_data->m1[12], client_data->m0[12]);
+                                                  break;
+                                        case 'N':
+                                        case 'n': printf("%c = %d\n", client_data->m1[13], client_data->m0[13]);
+                                                  break;
+                                        case 'O':
+                                        case 'o': printf("%c = %d\n", client_data->m1[14], client_data->m0[14]);
+                                                  break;
+                                        case 'P':
+                                        case 'p': printf("%c = %d\n", client_data->m1[15], client_data->m0[15]);
+                                                  break;
+					default: printf("Invalid choice received from client.\n");
+				} // Switch statement end.
+
+				client_data->temp += 1;
+			} // For-loop end.
+			
 			break;
 		}
 	}
@@ -180,9 +276,9 @@ void doprocessing (int sock, int waiting) {
 
 void game_to_string(char *game_string) {
 	int i = 0;
+
         while (i < 16) {
-        	char c = 'a' + i;
-                strncat(game_string, &c, 1);
+                strncat(game_string, &(client_data->m1[i]), 1);
                 if(i % 4 == 3)
                 	strcat(game_string, "\n");
                 else

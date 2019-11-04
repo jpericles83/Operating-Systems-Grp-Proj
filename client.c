@@ -15,7 +15,7 @@
 #include<netinet/in.h>
 #include<netdb.h>
 
-#define PORTNUM  7777 /* the port number that the server is listening to*/
+#define PORTNUM  1076 /* the port number that the server is listening to*/
 #define DEFAULT_PROTOCOL 0  /*constant for default protocol*/
 
 int stage = -1;
@@ -94,18 +94,19 @@ void main(int argc, char **argv) {
    			}
    
 			/* Read server response */
-   			bzero(buffer, 256);
-   			status = read(socketid, buffer, 255);
+   		//	bzero(buffer, 256);
+   		//	status = read(socketid, buffer, 255);
    
    			/* Upon successful completion, read() returns the number 
    			of bytes actually read from the file associated with fields.
    			This number is never greater than nbyte. Otherwise, -1 is returned. */
-   			if (status < 0) {
-      				perror("error while reading message from server");
-      				exit(1);
-   			}
+   		
+		//	if (status < 0) {
+      		//		perror("error while reading message from server");
+      		//		exit(1);
+   		//	}
    
-   			printf("%s\n", buffer);
+   		//	printf("%s\n", buffer);
 			stage = 1;
 			break;
 		} else if(stage == 2) { // play again screen
@@ -113,6 +114,26 @@ void main(int argc, char **argv) {
 		}
 
 	}
+
+	int t;	// Temporary variable for submission 2.
+
+	for(t = 0; t < 3; ++t) {
+		bzero(buffer, 256);
+		status = read(socketid, buffer, 255);	// Wait for server to give the matrix.
+
+		if (status < 0) {
+			perror("Error while reading message from the server.");
+			exit(1);
+		}
+
+		// Client chooses a letter.
+		printf("%s\nChoose a letter: ", buffer);
+		bzero(buffer, 256);
+		fgets(buffer, 255, stdin);
+		status = write(socketid, buffer, strlen(buffer));
+		printf("\n");
+	}
+
    	/* this closes the socket*/
    	close(socketid);
 

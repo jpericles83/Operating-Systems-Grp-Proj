@@ -18,7 +18,7 @@
 #define PORTNUM  7777 /* the port number that the server is listening to*/
 #define DEFAULT_PROTOCOL 0  /*constant for default protocol*/
 
-int stage = -1;
+int stage = 0;
 
 void main(int argc, char **argv) {
 	int  port;
@@ -73,18 +73,18 @@ void main(int argc, char **argv) {
 
    	printf("Connected client socket to the server socket \n");
 
+	status = read(socketid, &stage, 4); // get current stage of the game
+	if(stage == 1) {
+		printf("There is currently a game in session on this host. Please wait for it to finish.\n");
+		status = read(socketid, &stage, 4); // wait until server sends ready signal
+	}
    	/* now lets send a message to the server. the message will be
      	whatever the user wants to write to the server.*/
   	while(1) {
-		status = read(socketid, &stage, 4); // get current stage of the game
-		if(stage == 1) { // if game is in progress
-			printf("There is already a game in session on this host. Please wait...\n");
-			continue;
-		
-		} else if(stage == 0) { // if game is waiting on clients
-   			printf("Enter anything when ready to play: ");
+		if(stage == 0) { // if game is waiting on clients
+   			printf("Please enter your name to begin playing: ");
    			bzero(buffer, 256);
-   			fgets(buffer, 255, stdin);
+   			fgets(buffer, 256, stdin);
    			status = write(socketid, buffer, strlen(buffer));
 
 			printf("Please wait...\n");		
@@ -95,7 +95,7 @@ void main(int argc, char **argv) {
    
 			/* Read server response */
    			bzero(buffer, 256);
-   			status = read(socketid, buffer, 255);
+   			status = read(socketid, buffer, 256);
    
    			/* Upon successful completion, read() returns the number 
    			of bytes actually read from the file associated with fields.
@@ -107,10 +107,23 @@ void main(int argc, char **argv) {
    
    			printf("%s\n", buffer);
 			stage = 1;
-			break;
-		} else if(stage == 2) { // play again screen
+		} else if(stage == 1) { // if the game has started
+			while(stage == 1) {
+				printf("Please enter a location: ");
+			
+				char location = getchar(); 
+				int remaining; // getchar() returns unsigned char cast to an int or EOF
+				while((remaining = getchar()) != '\n' && remaining != EOF); // grab the first character and purge the input buffer
+				status = write(socketid, (const char *) &location, 1);
 
-		}
+				bzero(buffer, 256);
+				status = read(socketid, buffer, 256);
+				printf("\n%s\n", buffer);
+
+				status = read(socketid, &stage, 4); // make sure game is still in session
+			}
+		} else if(stage == 2) // finished
+			break;
 
 	}
    	/* this closes the socket*/

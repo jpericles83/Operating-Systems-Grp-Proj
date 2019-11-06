@@ -111,7 +111,7 @@ int main(int argc, char *argv[])  {
 	printf("Server successfully binded on port %d. Listening for clients.\n", PORTNUM);
 
 	pid2 = fork(); // the game process
-	if(pid2 == fork()) { 
+	if(pid2 == 0) { 
 		while(1) {
 			if(client_data->stage == AWAITING_CLIENTS && client_data->num_clients >= 2 && client_data->num_ready == client_data->num_clients) {
 				generate_game_matrix();

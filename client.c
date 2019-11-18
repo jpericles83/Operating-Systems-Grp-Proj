@@ -21,6 +21,12 @@
 int stage = 0;
 
 void main(int argc, char **argv) {
+
+	if(argc < 2) {
+		printf("Please enter the osnode # to connect to as an argument. Ex: ./client 02\n");
+		exit(0);
+	}	
+
 	int  port;
   	int  socketid;      /*will hold the id of the socket created*/
    	int  status;        /* error status holder*/
@@ -78,33 +84,35 @@ void main(int argc, char **argv) {
 		printf("There is currently a game in session on this host. Please wait for it to finish.\n");
 		status = read(socketid, &stage, 4); // wait until server sends ready signal
 	}
-   	/* now lets send a message to the server. the message will be
-     	whatever the user wants to write to the server.*/
+	int finish = 0;
+
   	while(1) {
 		if(stage == 0) { // if game is waiting on clients
-   			printf("Please enter your name to begin playing: ");
    			bzero(buffer, 256);
+			status = read(socketid, buffer, 256);	
+			printf("%s", buffer);
+
+			if(strcmp(buffer, "Would you like to play again? (y/n): ") == 0) // check for replay prompt		
+				finish = 1;
+
+			bzero(buffer, 256);
    			fgets(buffer, 256, stdin);
    			status = write(socketid, buffer, strlen(buffer));
-
+				
+			if(finish == 1 && (buffer[0] == 'n' || buffer[0] == 'N')) {
+				printf("Thank you for playing!\n");
+				break;
+			}		
+			
+			finish = 0;
 			printf("Please wait...\n");		
 
 	   		if (status < 0) {
      				printf("error while sending client message to server\n");
    			}
    
-			/* Read server response */
    			bzero(buffer, 256);
    			status = read(socketid, buffer, 256);
-   
-   			/* Upon successful completion, read() returns the number 
-   			of bytes actually read from the file associated with fields.
-   			This number is never greater than nbyte. Otherwise, -1 is returned. */
-   			if (status < 0) {
-      				perror("error while reading message from server");
-      				exit(1);
-   			}
-   
    			printf("%s\n", buffer);
 			stage = 1;
 		} else if(stage == 1) { // if the game has started
@@ -122,13 +130,9 @@ void main(int argc, char **argv) {
 
 				status = read(socketid, &stage, 4); // make sure game is still in session
 			}
-		} else if(stage == 2) // finished
-			break;
+		}
 
 	}
    	/* this closes the socket*/
    	close(socketid);
-
-  
 } 
-
